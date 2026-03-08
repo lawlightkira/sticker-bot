@@ -1,34 +1,98 @@
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, downloadMediaMessage } = require("@whiskeysockets/baileys")
+const pino = require("pino")
+const sharp = require("sharp")
 
-async function startBot() {
-const { state, saveCreds } = await useMultiFileAuthState("auth")
+async function startBot(){
+
+const { state, saveCreds } = await useMultiFileAuthState("session")
+const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
+version,
 auth: state,
-printQRInTerminal: false
-})
-
-sock.ev.on("connection.update", async (update) => {
-const { connection, pairingCode } = update
-
-if (pairingCode) {
-console.log("CODIGO:", pairingCode)
-}
-
-if (connection === "open") {
-console.log("BOT CONECTADO")
-}
-
-if (connection === "close") {
-console.log("Conexão fechada, tentando reconectar...")
-startBot()
-}
+logger: pino({ level: "silent" })
 })
 
 sock.ev.on("creds.update", saveCreds)
+
+sock.ev.on("connection.update", async (update) => {
+
+const { connection } = update
+
+if(connection === "connecting"){
+console.log("Conectando ao WhatsApp...")
+}
+
+if(connection === "open"){
+console.log("BOT CONECTADO")
+}
+
+if(connection === "close"){
+console.log("Reconectando em 5s...")
+setTimeout(startBot,5000)
+}
+
+})
+
+if(!sock.authState.creds.registered){
+
+setTimeout(async ()=>{
+
+const numero = "55SEUNUMERO"
+
+const code = await sock.requestPairingCode(numero)
+
+console.log("CODIGO DE PAREAMENTO:",code)
+
+},15000)
+
+}
+
+sock.ev.on("messages.upsert", async ({messages}) => {
+
+const m = messages[0]
+if(!m.message) return
+
+const text =
+m.message.conversation ||
+m.message.extendedTextMessage?.text ||
+""
+
+const from = m.key.remoteJid
+
+if(text === ".s"){
+
+const quoted =
+m.message.extendedTextMessage?.contextInfo?.quotedMessage
+
+const image =
+quoted?.imageMessage || m.message.imageMessage
+
+if(!image){
+await sock.sendMessage(from,{text:"Responda uma imagem com .s"})
+return
+}
+
+const msg = quoted ? { message: quoted } : m
+
+const buffer = await downloadMediaMessage(msg,"buffer",{},{})
+
+const sticker = await sharp(buffer)
+.resize(512,512,{
+fit:"contain",
+background:{ r:0,g:0,b:0,alpha:0 }
+})
+.webp()
+.toBuffer()
+
+await sock.sendMessage(from,{sticker})
+
+}
+
+})
+
 }
 
 startBot()
 
-// mantém o render vivo
-setInterval(() => {}, 1000)
+setInterval(()=>{},1000)
