@@ -1,40 +1,34 @@
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys")
-const pino = require("pino")
-const sharp = require("sharp")
+const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
 
-async function start(){
-
-const { state, saveCreds } = await useMultiFileAuthState("session")
-const { version } = await fetchLatestBaileysVersion()
+async function startBot() {
+const { state, saveCreds } = await useMultiFileAuthState("auth")
 
 const sock = makeWASocket({
-version,
 auth: state,
-logger: pino({ level: "silent" })
+printQRInTerminal: false
+})
+
+sock.ev.on("connection.update", async (update) => {
+const { connection, pairingCode } = update
+
+if (pairingCode) {
+console.log("CODIGO:", pairingCode)
+}
+
+if (connection === "open") {
+console.log("BOT CONECTADO")
+}
+
+if (connection === "close") {
+console.log("Conexão fechada, tentando reconectar...")
+startBot()
+}
 })
 
 sock.ev.on("creds.update", saveCreds)
-
-sock.ev.on("connection.update", async (update) => {
-
-const { connection } = update
-
-if(connection === "open"){
-console.log("BOT ONLINE")
 }
 
-})
+startBot()
 
-if(!sock.authState.creds.registered){
-
-const numero = "55SEUNUMERO"
-
-const code = await sock.requestPairingCode(numero)
-
-console.log("CODIGO:", code)
-
-}
-
-}
-
-start()
+// mantém o render vivo
+setInterval(() => {}, 1000)
