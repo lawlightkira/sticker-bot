@@ -38,7 +38,7 @@ if(!sock.authState.creds.registered){
 
 setTimeout(async ()=>{
 
-const numero = "55SEUNUMERO"
+const numero = "5511962579172"
 
 const code = await sock.requestPairingCode(numero)
 
